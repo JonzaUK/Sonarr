@@ -1,0 +1,158 @@
+# Fork-only workflow, baseline variant. Identical to the one on
+# fork-docker-build except for the image name and the branch it triggers on.
+#
+# This branch is upstream 2933f1b with no code changes at all, so the image it
+# produces differs from the anime-search image by exactly the four commits under
+# test. Same base commit, same build pipeline, same base image. Anything else
+# would make the before and after numbers unusable.
+
+name: Fork Docker Build
+
+on:
+  push:
+    branches:
+      - fork-docker-baseline
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FRAMEWORK: net10.0
+  IMAGE_NAME: sonarr-anime-baseline
+
+jobs:
+  backend:
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: [linux-x64, linux-arm64]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v6
+
+      # package_tests is deliberately omitted rather than set to false. A
+      # composite action input is always a string, and the string "false" is
+      # truthy in a GitHub if: expression, so passing it would run the test
+      # packaging step for both runtimes.
+      - name: Build
+        uses: ./.github/actions/build
+        with:
+          branch: ${{ github.ref_name }}
+          version: 5.0.0.${{ github.run_number }}
+          framework: ${{ env.FRAMEWORK }}
+          runtime: ${{ matrix.runtime }}
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v6
+
+      - name: Volta
+        uses: volta-cli/action@v5
+
+      - name: Yarn Install
+        run: yarn install --frozen-lockfile
+
+      - name: Build
+        run: yarn build --env production
+
+      - name: Publish UI Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: build_ui
+          path: _output/UI/**/*
+
+  docker:
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@v6
+
+      - name: Download backend artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: build-linux-*
+          merge-multiple: true
+          path: _dl
+
+      - name: Download UI artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: build_ui
+          path: _ui
+
+      # Artifacts do not carry the unix executable bit, which is why package.sh
+      # re-applies it upstream after downloading. The same applies here.
+      - name: Stage rootfs
+        run: |
+          set -euo pipefail
+
+          stage() {
+            runtime="$1"
+            arch="$2"
+            src="_dl/${runtime}/${FRAMEWORK}/Sonarr"
+            dest=".github/docker/rootfs/${arch}"
+
+            echo "Staging ${runtime} as ${arch}"
+            test -f "${src}/Sonarr" || { echo "no Sonarr binary in ${src}"; exit 1; }
+
+            mkdir -p "${dest}"
+            cp -r "${src}"/* "${dest}/"
+            cp -r _ui "${dest}/UI"
+
+            chmod a+x "${dest}/Sonarr"
+            find "${dest}" -name ffprobe -exec chmod a+x {} \;
+            find "${dest}" -name "Sonarr.Update" -type f -exec chmod a+x {} \;
+          }
+
+          stage linux-x64 amd64
+          stage linux-arm64 arm64
+
+      - name: Lowercase image reference
+        id: image
+        run: echo "ref=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .github/docker
+          file: .github/docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          tags: |
+            ${{ steps.image.outputs.ref }}:latest
+            ${{ steps.image.outputs.ref }}:${{ github.sha }}
+
+      - name: Summary
+        run: |
+          {
+            echo "### Image pushed"
+            echo
+            echo '```'
+            echo "docker pull ${{ steps.image.outputs.ref }}:latest"
+            echo '```'
+            echo
+            echo "Commit \`${GITHUB_SHA}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
