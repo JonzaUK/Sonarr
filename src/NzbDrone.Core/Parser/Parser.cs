@@ -848,7 +848,7 @@ namespace NzbDrone.Core.Parser
                     Title = seriesTitle,
                     TitleWithoutYear = seriesTitle
                 },
-                SeasonNumber = -1,
+                SeasonNumber = null,
                 EpisodeNumbers = [],
                 AbsoluteEpisodeNumbers = [],
                 FullSeason = true,
@@ -1001,6 +1001,7 @@ namespace NzbDrone.Core.Parser
                 result = new ParsedEpisodeInfo
                 {
                     ReleaseTitle = releaseTitle,
+                    SeasonNumber = 0,
                     EpisodeNumbers = Array.Empty<int>(),
                     AbsoluteEpisodeNumbers = Array.Empty<int>()
                 };
@@ -1214,6 +1215,7 @@ namespace NzbDrone.Core.Parser
                 result = new ParsedEpisodeInfo
                 {
                     ReleaseTitle = releaseTitle,
+                    SeasonNumber = 0,
                     AirDate = airDate.ToString(Episode.AIR_DATE_FORMAT),
                 };
 
