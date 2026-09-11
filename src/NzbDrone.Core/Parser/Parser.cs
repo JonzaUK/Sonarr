@@ -516,7 +516,7 @@ namespace NzbDrone.Core.Parser
         // Regex to detect whether the title was reversed.
         private static readonly Regex ReversedTitleRegex = new Regex(@"(?:^|[-._ ])(p027|p0801|\d{2,3}E-?\d{2}S)[-._ ]", RegexOptions.Compiled);
 
-        private static readonly Regex AnimeSeasonReleaseMetadataRegex = new Regex(@"[\[({][^\[\]{}()]+[\])}]", RegexOptions.Compiled);
+        private static readonly Regex AnimeSeasonReleaseMetadataRegex = new Regex(@"\[[^\[\]]+\]|\([^()]+\)|\{[^{}]+\}", RegexOptions.Compiled);
 
         private static readonly Regex AnimeSpecialMarkerRegex = new Regex(@"\b(special|ova|ovd|ncop|nced)\b",
                                                                           RegexOptions.Compiled | RegexOptions.IgnoreCase);

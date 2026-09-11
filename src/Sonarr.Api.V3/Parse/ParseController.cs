@@ -63,7 +63,7 @@ namespace Sonarr.Api.V3.Parse
                 return new ParseResource
                 {
                     Title = title,
-                    ParsedEpisodeInfo = remoteEpisode.ParsedEpisodeInfo,
+                    ParsedEpisodeInfo = remoteEpisode.ParsedEpisodeInfo.ToResource(),
                     Series = remoteEpisode.Series.ToResource(),
                     Episodes = remoteEpisode.Episodes.ToResource(),
                     Languages = remoteEpisode.Languages,
@@ -76,7 +76,7 @@ namespace Sonarr.Api.V3.Parse
                 return new ParseResource
                 {
                     Title = title,
-                    ParsedEpisodeInfo = parsedEpisodeInfo
+                    ParsedEpisodeInfo = parsedEpisodeInfo.ToResource()
                 };
             }
         }
